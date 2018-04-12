@@ -1,0 +1,235 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+package com.gbc.mc.model;
+
+import com.gbc.mc.database.MySqlFactory;
+import com.gbc.mc.hmacutil.HashStringToSha1;
+import com.google.gson.JsonObject;
+import java.io.IOException;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Level;
+import org.apache.log4j.Logger;
+
+/**
+ *
+ * @author tamvh
+ */
+public class AccountModel {
+
+    private static AccountModel _instance = null;
+    private static final Lock createLock_ = new ReentrantLock();
+    protected final Logger logger = Logger.getLogger(this.getClass());
+
+    public static AccountModel getInstance() throws IOException {
+        if (_instance == null) {
+            createLock_.lock();
+            try {
+                if (_instance == null) {
+                    _instance = new AccountModel();
+                }
+            } finally {
+                createLock_.unlock();
+            }
+        }
+        return _instance;
+    }
+    
+    public int blockAccount(String u) {
+        int ret = -1;
+        Connection connection = null;
+        Statement stmt = null;
+        ResultSet rs = null;
+
+        try {
+            String queryStr;
+            connection = MySqlFactory.getConnection();
+            stmt = connection.createStatement();
+            queryStr = String.format("UPDATE `account` SET `status`= 0) WHERE `account_name` = '%1$s'", u);
+            System.out.println("Query blockAccount: " + queryStr);
+            int result = stmt.executeUpdate(queryStr);
+            if(result > 0) {
+                ret = 0;
+            }
+        } catch (SQLException ex) {
+            java.util.logging.Logger.getLogger(AccountModel.class.getName()).log(Level.SEVERE, null, ex);
+            ret = -1;
+        } finally {
+            MySqlFactory.safeClose(rs);
+            MySqlFactory.safeClose(stmt);
+            MySqlFactory.safeClose(connection);
+        }
+        return ret;
+    }
+    
+    public int changeAccountType(String u, int acc_type) {
+        int ret = -1;
+        Connection connection = null;
+        Statement stmt = null;
+        ResultSet rs = null;
+
+        try {
+            String queryStr;
+            connection = MySqlFactory.getConnection();
+            stmt = connection.createStatement();
+            queryStr = String.format("UPDATE `account` SET `acc_type`= %1$d) WHERE `account_name` = '%2$s'", acc_type, u);
+            System.out.println("Query changeAccountType: " + queryStr);
+            int result = stmt.executeUpdate(queryStr);
+            if(result > 0) {
+                ret = 0;
+            }
+        } catch (SQLException ex) {
+            java.util.logging.Logger.getLogger(AccountModel.class.getName()).log(Level.SEVERE, null, ex);
+            ret = -1;
+        } finally {
+            MySqlFactory.safeClose(rs);
+            MySqlFactory.safeClose(stmt);
+            MySqlFactory.safeClose(connection);
+        }
+        return ret;
+    }
+    
+    public int deleteAccount(String u) {
+        int ret = -1;
+        Connection connection = null;
+        Statement stmt = null;
+        ResultSet rs = null;
+
+        try {
+            String queryStr;
+            connection = MySqlFactory.getConnection();
+            stmt = connection.createStatement();
+            queryStr = String.format("DELETE `account` WHERE `account_name` = '%1$s'", u);
+            System.out.println("Query deleteAccount: " + queryStr);
+            int result = stmt.executeUpdate(queryStr);
+            if(result > 0) {
+                ret = 0;
+            }
+        } catch (SQLException ex) {
+            java.util.logging.Logger.getLogger(AccountModel.class.getName()).log(Level.SEVERE, null, ex);
+            ret = -1;
+        } finally {
+            MySqlFactory.safeClose(rs);
+            MySqlFactory.safeClose(stmt);
+            MySqlFactory.safeClose(connection);
+        }
+        return ret;
+    }
+    
+    
+    public int insertAccount(String u, int acc_type) {
+        int ret = -1;
+        Connection connection = null;
+        Statement stmt = null;
+        ResultSet rs = null;
+
+        try {
+            String queryStr;
+            String accountTableName = "account";
+            connection = MySqlFactory.getConnection();
+            stmt = connection.createStatement();
+            queryStr = String.format("INSERT INTO %1$s (account_name, password, account_type) VALUES ('%2$s', PASSWORD('123456'), %3$d)",
+                    accountTableName, u, acc_type);
+            System.out.println("Query insertAccount: " + queryStr);
+            int result = stmt.executeUpdate(queryStr);
+            if(result > 0) {
+                ret = 0;
+            }
+        } catch (SQLException ex) {
+            java.util.logging.Logger.getLogger(AccountModel.class.getName()).log(Level.SEVERE, null, ex);
+            ret = -1;
+        } finally {
+            MySqlFactory.safeClose(rs);
+            MySqlFactory.safeClose(stmt);
+            MySqlFactory.safeClose(connection);
+        }
+        return ret;
+    }
+
+    public int checkLogin(String username, String password, JsonObject account) {
+
+        int ret = -1;
+        Connection connection = null;
+        Statement stmt = null;
+        ResultSet rs = null;
+        String sha1Pass=HashStringToSha1.sha1(password);
+        try {
+            String queryStr;
+            String accountTableName = "account";
+            connection = MySqlFactory.getConnection();
+            stmt = connection.createStatement();
+
+            queryStr = String.format("SELECT `account_id`, `account_name` FROM %1$s"
+                    + " WHERE `account_name` = '%2$s' AND `password` = '%3$s' AND status = 1",
+                    accountTableName, username, sha1Pass);
+            System.out.println("Query login: " + queryStr);
+            stmt.execute(queryStr);
+            rs = stmt.getResultSet();
+            if (rs != null) {
+                if (rs.next()) {
+                    account.addProperty("account_id", rs.getInt("account_id"));
+                    account.addProperty("account_name", rs.getString("account_name"));
+                    ret = 0;
+                } else {
+                    ret = 2;
+                }
+            }
+        } catch (SQLException ex) {
+            java.util.logging.Logger.getLogger(AccountModel.class.getName()).log(Level.SEVERE, null, ex);
+            ret = -1;
+        } finally {
+            MySqlFactory.safeClose(rs);
+            MySqlFactory.safeClose(stmt);
+            MySqlFactory.safeClose(connection);
+        }
+        return ret;
+    }
+
+    public int changePW(String username, String o_p, String n_p) {
+        int ret = -1;
+        Connection connection = null;
+        Statement stmt = null;
+        ResultSet rs = null;
+
+        try {
+            String queryStr;
+            String accountTableName = "account";
+            connection = MySqlFactory.getConnection();
+            stmt = connection.createStatement();
+            o_p=HashStringToSha1.sha1(o_p);
+            n_p=HashStringToSha1.sha1(n_p);
+
+            queryStr = String.format("SELECT * FROM %1$s"
+                    + " WHERE `account_name` = '%2$s' AND `password` = '%3$s' AND status = 1",
+                    accountTableName, username, o_p);
+            System.out.println("Query change password: " + queryStr);
+            stmt.execute(queryStr);
+            rs = stmt.getResultSet();
+            if (rs != null) {
+                if (rs.next()) {
+                    queryStr = String.format("UPDATE `account` SET `password`= '%1$s' WHERE `account_name` = '%2$s'", n_p, username);
+                    if (stmt.executeUpdate(queryStr) > 0) {
+                        ret = 0;
+                    }
+                } else {
+                    ret = 1; //tài khoản không tồn tại
+                }
+            }
+        } catch (SQLException ex) {
+            java.util.logging.Logger.getLogger(AccountModel.class.getName()).log(Level.SEVERE, null, ex);
+            ret = -1;
+        } finally {
+            MySqlFactory.safeClose(rs);
+            MySqlFactory.safeClose(stmt);
+            MySqlFactory.safeClose(connection);
+        }
+        return ret;
+    }
+}
